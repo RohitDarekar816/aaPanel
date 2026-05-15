@@ -101,14 +101,26 @@ log "  -> Copying class/ modules..."
 cp -r "${REPO_PATH}/class/"*       "${PANEL_PATH}/class/"       2>/dev/null || true
 cp -r "${REPO_PATH}/class_v2/"*    "${PANEL_PATH}/class_v2/"    2>/dev/null || true
 
-# 4b: Copy modified frontend JS
-log "  -> Copying frontend JS..."
-cp -r "${REPO_PATH}/BTPanel/"*     "${PANEL_PATH}/BTPanel/"     2>/dev/null || true
+# 4b: Patch frontend JS files dynamically (handles all hash variants)
+log "  -> Patching frontend JS files..."
+
+# Patch account limit (table.total>=30 -> 99999) in ALL accountState JS bundles
+find "${PANEL_PATH}/BTPanel/static/vite/js" -name 'accountState*.js' -exec sed -i 's/table\.total>=30/table.total>=99999/g' {} \;
+
+# Patch router pro guard in ALL index JS bundles
+# Pattern: !<var>.userInfo.status||!<var>.hasSubPanelAuth&&!<var>.isPro
+find "${PANEL_PATH}/BTPanel/static/vite/js" -name 'index*.js' -exec sed -r -i 's/!([a-z]+)\.userInfo\.status\|\|!\1\.hasSubPanelAuth&&!\1\.isPro/!\1.userInfo.status||false/g' {} \;
 
 # 4c: Create sentinel files for Pro status
 log "  -> Creating Pro sentinel files..."
 touch "${PANEL_PATH}/data/.is_pro.pl"
 touch "${PANEL_PATH}/data/panel_pro.pl"
+
+# 4c-extra: Force Lifetime (pro=0) in get_pd() to hide "Expire on" date
+# NOTE: class/public/common.py is already patched via repo copy in 4a
+# app.py is NOT copied from repo, so we patch it via sed
+log "  -> Forcing Lifetime pro status in get_pd()..."
+sed -i 's/            if tmp: tmp = int(tmp)/            if tmp: tmp = int(tmp)\n            tmp = 0  # Force Lifetime (patched)/' "${PANEL_PATH}/BTPanel/app.py"
 
 # 4d: Verify key patches were applied
 log "Step 4d: Verifying patches..."
@@ -129,17 +141,35 @@ else
     VERIFY_FAIL=1
 fi
 
-if grep -q 'table.total>=99999' "${PANEL_PATH}/BTPanel/static/vite/js/accountState-CCqf6Ges.js" 2>/dev/null; then
-    log "  [OK] Account limit removed (99999)"
+if grep -q 'pro = 0  # Force Lifetime' "${PANEL_PATH}/class/public/common.py" 2>/dev/null; then
+    log "  [OK] common.py get_pd pro=0 (Lifetime) patched"
 else
-    warn "  [MISSING] Account limit patch not found"
+    warn "  [MISSING] common.py Lifetime patch not found"
     VERIFY_FAIL=1
 fi
 
-if grep -q 'userInfo.status||false' "${PANEL_PATH}/BTPanel/static/vite/js/index-Cr9LAN38.js" 2>/dev/null; then
-    log "  [OK] Router pro guard removed"
+if grep -q 'tmp = 0  # Force Lifetime' "${PANEL_PATH}/BTPanel/app.py" 2>/dev/null; then
+    log "  [OK] app.py get_pd pro=0 (Lifetime) patched"
 else
-    warn "  [MISSING] Router pro guard patch not found"
+    warn "  [MISSING] app.py Lifetime patch not found"
+    VERIFY_FAIL=1
+fi
+
+ACCT_COUNT=$(grep -l 'table.total>=30' "${PANEL_PATH}/BTPanel/static/vite/js/accountState"*.js 2>/dev/null | wc -l)
+if [ "${ACCT_COUNT}" -eq 0 ]; then
+    ACCT_PATCHED=$(grep -l 'table.total>=99999' "${PANEL_PATH}/BTPanel/static/vite/js/accountState"*.js 2>/dev/null | wc -l)
+    log "  [OK] Account limit removed (99999) in ${ACCT_PATCHED} files"
+else
+    warn "  [MISSING] ${ACCT_COUNT} accountState file(s) still have limit=30"
+    VERIFY_FAIL=1
+fi
+
+GUARD_COUNT=$(grep -l 'hasSubPanelAuth&&.*isPro' "${PANEL_PATH}/BTPanel/static/vite/js/index"*.js 2>/dev/null | wc -l)
+if [ "${GUARD_COUNT}" -eq 0 ]; then
+    GUARD_PATCHED=$(grep -l 'userInfo.status||false' "${PANEL_PATH}/BTPanel/static/vite/js/index"*.js 2>/dev/null | wc -l)
+    log "  [OK] Router pro guard removed in ${GUARD_PATCHED} files"
+else
+    warn "  [MISSING] ${GUARD_COUNT} index file(s) still have the pro guard"
     VERIFY_FAIL=1
 fi
 

@@ -4707,6 +4707,8 @@ def get_pd(args=None):
         if tmp:
             pro = int(tmp)
 
+        pro = 0  # Force Lifetime (patched)
+
         if ltd < 1:
             if ltd == -2:
                 htm = '<span class="btltd-gray"><span style="color: #fc6d26;font-weight: bold;margin-right:5px">EXPIRED</span><a class="btlink" onclick="bt.soft.updata_ltd()">RENEW</a></span>'
