@@ -502,6 +502,7 @@ class panelPlugin:
             if 'uninsatll_checks' not in softInfo:
                 softInfo['uninsatll_checks'] = softInfo['uninstall_checks']
 
+        softList['trail'] = 0
         return softList
 
     #取提醒标记

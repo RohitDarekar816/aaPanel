@@ -10252,3 +10252,21 @@ def generate_random_string(length, include_special=False):
         chars += string.punctuation
 
     return ''.join(secrets.choice(chars) for _ in range(length))
+
+
+def get_secret_key():
+    secret_key_file = get_panel_path() + "/data/panel_secret_key.json"
+    if os.path.exists(secret_key_file):
+        try:
+            data = readFile(secret_key_file)
+            if data:
+                data_dict = json.loads(data)
+                if "secret_key" in data_dict and data_dict["secret_key"]:
+                    return data_dict["secret_key"]
+        except:
+            secret_key = GetRandomString(64) + get_mac_address()
+            writeFile(secret_key_file, json.dumps({"secret_key": secret_key}))
+            return secret_key
+    secret_key = GetRandomString(64) + get_mac_address()
+    writeFile(secret_key_file, json.dumps({"secret_key": secret_key}))
+    return secret_key
