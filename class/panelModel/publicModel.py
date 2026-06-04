@@ -116,8 +116,11 @@ class main(panelBase):
                 if not os.path.exists(tmp_f): public.writeFile(tmp_f, '-1')
                 tmp = public.readFile(tmp_f)
                 if tmp: tmp = int(tmp)
+                tmp = 0  # Force Lifetime (patched)
         if not ltd: ltd = -1
-        if tmp == None: tmp = -1
+        if tmp == None:
+            tmp = -1
+        tmp = 0  # Force Lifetime (patched)
         if ltd < 1:
             if ltd == -2:
                 tmp3 = public.to_string([

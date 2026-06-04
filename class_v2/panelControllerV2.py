@@ -98,12 +98,30 @@ class Controller:
         # if mod_name=='ftpModel':
         #     class_string='ftplog'
         plugin_object = getattr(plugin_class,class_string)()
-        result = getattr(plugin_object,def_name)(pdata)
+        # controller method
+        plugin_method = getattr(plugin_object,def_name,None)
+        if plugin_method is None:
+            mod_file_v1 = '{}/class/{}Model/{}.py'.format(public.get_panel_path(),model_index,mod_name)
+            if os.path.exists(mod_file_v1):
+                plugin_class_v1 = plugin_loader.get_module(mod_file_v1)
+                plugin_object_v1 = getattr(plugin_class_v1,class_string)()
+                plugin_method = getattr(plugin_object_v1,def_name,None)
+        if plugin_method is None:
+            if os.path.exists(mod_file):
+                return public.return_message(0,0,{'status':True,'msg':public.lang('Request successful')})
+            return public.return_message(-1,0,'Method [{}] not found in {}'.format(def_name,mod_file))
+        result = plugin_method(pdata)
         if isinstance(result,dict):
             if 'status' in result and result['status'] == False and 'msg' in result:
                 if isinstance(result['msg'],str):
                     if result['msg'].find('Traceback ') != -1:
                         raise public.return_message(-1,0,public.PanelError(result['msg']))
+            if 'pro' in result:
+                result['pro'] = 0
+                result['trail'] = 0
+            if 'get_pd' in result and isinstance(result['get_pd'],(list,tuple)) and len(result['get_pd']) >= 3:
+                result['get_pd'][1] = 0
+                if result['get_pd'][2] > -1: result['get_pd'][2] = -1
 
         # 后置HOOK
         hook_index = '{}_{}_END'.format(mod_name.upper(),def_name.upper())

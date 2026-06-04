@@ -846,6 +846,7 @@ class panelPlugin:
                 softInfo['uninsatll_checks'] = softInfo['uninstall_checks']
 
         softList['trail'] = 0
+        softList['pro'] = 0  # Force Lifetime Pro (patched)
         return softList
 
     #取提醒标记

@@ -96,10 +96,20 @@ log "Backup complete."
 # ─── Step 4: Apply custom patches ─────────────────────────────────────
 log "Step 4: Applying custom patches from repository..."
 
-# 4a: Copy modified Python modules
+# 4a: Copy modified Python modules (skip encrypted model files to preserve installed version)
 log "  -> Copying class/ modules..."
 cp -r "${REPO_PATH}/class/"*       "${PANEL_PATH}/class/"       2>/dev/null || true
-cp -r "${REPO_PATH}/class_v2/"*    "${PANEL_PATH}/class_v2/"    2>/dev/null || true
+find "${REPO_PATH}/class_v2/" -maxdepth 1 -type f \( -name '*.py' -o -name '*.so' \) -not -path '*/panelModelV2/publicModel.py' -exec cp -r {} "${PANEL_PATH}/class_v2/" \; 2>/dev/null || true
+# Also copy subdirectories but skip encrypted publicModel.py
+for dir in "${REPO_PATH}/class_v2/"*/; do
+    dirname=$(basename "$dir")
+    if [ "$dirname" = "panelModelV2" ]; then
+        mkdir -p "${PANEL_PATH}/class_v2/panelModelV2"
+        find "$dir" -maxdepth 1 -type f -not -name 'publicModel.py' -exec cp {} "${PANEL_PATH}/class_v2/panelModelV2/" \; 2>/dev/null || true
+    else
+        cp -r "$dir" "${PANEL_PATH}/class_v2/" 2>/dev/null || true
+    fi
+done
 
 # 4b: Patch frontend JS files dynamically (handles all hash variants)
 log "  -> Patching frontend JS files..."
@@ -129,9 +139,9 @@ log "  -> Forcing Lifetime pro status in get_pd()..."
 sed -i 's/            if tmp: tmp = int(tmp)/            if tmp: tmp = int(tmp)\n            tmp = 0  # Force Lifetime (patched)/' "${PANEL_PATH}/BTPanel/app.py"
 
 # 4d: Force disable trial/unlock pro in backend response
-log "  -> Forcing trail=0 in plugin API responses..."
-sed -i 's/        return softList/        softList['"'"'trail'"'"'] = 0\n        return softList/' "${PANEL_PATH}/class/panelPlugin.py" 2>/dev/null || true
-sed -i 's/        return softList/        softList['"'"'trail'"'"'] = 0\n        return softList/' "${PANEL_PATH}/class_v2/panel_plugin_v2.py" 2>/dev/null || true
+log "  -> Forcing trail=0 and pro=0 in plugin API responses..."
+sed -i 's/        return softList/        softList['"'"'trail'"'"'] = 0\n        softList['"'"'pro'"'"'] = 0  # Force Lifetime Pro (patched)\n        return softList/' "${PANEL_PATH}/class/panelPlugin.py" 2>/dev/null || true
+sed -i 's/        return softList/        softList['"'"'trail'"'"'] = 0\n        softList['"'"'pro'"'"'] = 0  # Force Lifetime Pro (patched)\n        return softList/' "${PANEL_PATH}/class_v2/panel_plugin_v2.py" 2>/dev/null || true
 
 # 4e: Verify key patches were applied
 log "Step 4e: Verifying patches..."
@@ -180,10 +190,24 @@ else
     VERIFY_FAIL=1
 fi
 
+if grep -q "softList\['pro'\] = 0  # Force Lifetime Pro" "${PANEL_PATH}/class/panelPlugin.py" 2>/dev/null; then
+    log "  [OK] panelPlugin.py pro=0 (Lifetime Pro) patched"
+else
+    warn "  [MISSING] panelPlugin.py pro=0 (Lifetime Pro) patch not found"
+    VERIFY_FAIL=1
+fi
+
 if grep -q "softList\['trail'\] = 0" "${PANEL_PATH}/class_v2/panel_plugin_v2.py" 2>/dev/null; then
     log "  [OK] panel_plugin_v2.py trail=0 patched"
 else
     warn "  [MISSING] panel_plugin_v2.py trail=0 patch not found"
+    VERIFY_FAIL=1
+fi
+
+if grep -q "softList\['pro'\] = 0  # Force Lifetime Pro" "${PANEL_PATH}/class_v2/panel_plugin_v2.py" 2>/dev/null; then
+    log "  [OK] panel_plugin_v2.py pro=0 (Lifetime Pro) patched"
+else
+    warn "  [MISSING] panel_plugin_v2.py pro=0 (Lifetime Pro) patch not found"
     VERIFY_FAIL=1
 fi
 
